@@ -2,6 +2,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <map>
+using namespace std;
 
 #include "pcap-test.h"
 
@@ -20,6 +22,7 @@ RTH *rth;
 DP *dp;
 BD *bd;
 ESSID * essid;
+map <char, int> beacons;
 
 bool parse(Param* param, int argc, char* argv[]) {
 	if (argc != 2) {
@@ -27,29 +30,39 @@ bool parse(Param* param, int argc, char* argv[]) {
 		return false;
 	}
 	param->dev_ = argv[1];
-// 아래의 코드는 param.dev_에 mon0 즉 인터페이스가 입력 되는 것을 확인하는 것이다.
-//    printf("\n %s \n", param->dev_); 
 	return true;
 }
 
+
 void analysis_packet(int len, const u_char* packet){
+
     rth = (RTH*)packet;
     dp = (DP*)(packet+rth->it_len);
     bd = (BD*)(packet + rth->it_len + sizeof(ieee80211_header) - 1);
+
     essid = (ESSID*)(packet + rth->it_len-1 + sizeof(ieee80211_header) - 1 + sizeof(beacon_data) -1);
+	uint8_t rbssid[7];
     char ressid[32];
 
+	//bssid 변수 저장
+	for (int i = 0; i < sizeof(rbssid); i++){
+		rbssid[i] = dp->bssid[i];
+	}
+
     if (dp->sub_type == 0x80){      // sub_type == 0x80 -> beaconf packet filter
-        if(essid->ESSID[0] != 00){  // SSID 중 0x00이 있는 값이 있던데.... 삭제...
-//            printf("bd->ssid_length : %d \n", bd->ssid_length);
+        if(essid->ESSID[0] != 00){  // SSID 중 0x00이 있는 값이 있던 것 삭제
+			beacons[rbssid[0]] += 1;
+
             memcpy(ressid, essid->ESSID, bd->ssid_length);
-            printf("%02x:%02x:%02x:%02x:%02x:%02x", dp->bssid[0], dp->bssid[1], dp->bssid[2], dp->bssid[3], dp->bssid[4], dp->bssid[5]);        
-            printf("  ");
+			printf("%02x:%02x:%02x:%02x:%02x:%02x", rbssid[0], rbssid[1], rbssid[2], rbssid[3], rbssid[4], rbssid[5]);
+			printf("\t%d", beacons.at(rbssid[0]));
+            printf("\t");
             //끝에 \0으로 안끝나다 보니 이상한 문자도 같이 출력 -> 길이 만큼 글자 하나하나 추가
             for(int i = 0; i <= bd->ssid_length-1; i++){
                 printf("%c", ressid[i]);
             }
             printf("\n");
+
         }
     }
 }
@@ -73,7 +86,7 @@ int main(int argc, char* argv[]) {
 	}
 
     // 실제 데이터의 처리를 해야 하는 부분
-    printf("BSSID             ESSID \n");
+    printf("BSSID\t\t beacons \t\tESSID \n");
 	while (true) {
 		struct pcap_pkthdr* header;
 		const u_char* packet;
@@ -83,14 +96,8 @@ int main(int argc, char* argv[]) {
 			printf("pcap_next_ex return %d(%s)\n", res, pcap_geterr(pcap));
 			break;
 		}
-//        printf("=====%d===", packet);
-//		printf("%u bytes captured\n", header->caplen);
 
-        // 패킷의 크기와 실제 내용을 전달
         analysis_packet(header->len, packet);
-//        printf("-------------\n");
-//        printf("%x", header->len);
-//        printf("-------------\n");
 	}
 
 	pcap_close(pcap);
