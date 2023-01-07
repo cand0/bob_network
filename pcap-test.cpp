@@ -22,6 +22,8 @@ RTH *rth;
 DP *dp;
 BD *bd;
 ESSID * essid;
+FLAG *flag;
+
 map <char, int> beacons;
 
 bool parse(Param* param, int argc, char* argv[]) {
@@ -33,6 +35,28 @@ bool parse(Param* param, int argc, char* argv[]) {
 	return true;
 }
 
+int analysis_flags(const u_char* packet){
+	int idx = 16-4;						//start -> flag까지
+
+	flag = (FLAG*)packet+4;
+
+	if(!(flag->flag & 0x20))			// 0x20이 아니면 power를 측정하지 않음
+		return 0;
+
+	if(flag->flag & 0x1)	// mac timestamp가 들어가 있음
+		idx += 8;
+	if(flag->flag & 0x2)	// Flags
+		idx += 1;
+	if(flag->flag & 0x4)	// Rate
+		idx += 4;
+	if(flag->flag & 0x8)	// Channel 
+		idx += 4;
+	if(flag->flag & 0x10)	// FHSS
+		idx += 1;
+	if(flag->flag & 0x80000000)	//present flag 필드가 하나 더 있음
+		idx += 4;
+	return *(int8_t*)(packet + idx + 1);		// int로 그냥 보내면 -가 안됨 -> byte로 바꿔줌
+}
 
 void analysis_packet(int len, const u_char* packet){
 
@@ -53,13 +77,17 @@ void analysis_packet(int len, const u_char* packet){
         if(essid->ESSID[0] != 00){  // SSID 중 0x00이 있는 값이 있던 것 삭제
 			beacons[rbssid[0]] += 1;
 
-            memcpy(ressid, essid->ESSID, bd->ssid_length);
-			printf("%02x:%02x:%02x:%02x:%02x:%02x", rbssid[0], rbssid[1], rbssid[2], rbssid[3], rbssid[4], rbssid[5]);
-			printf("\t%d", beacons.at(rbssid[0]));
+            memcpy(ressid, essid->ESSID, bd->ssid_length);		//SSID
+			int power = analysis_flags(packet);					//PWR
+
+			printf("%02x:%02x:%02x:%02x:%02x:%02x", rbssid[0], rbssid[1], rbssid[2], rbssid[3], rbssid[4], rbssid[5]);	//BSSID
+			printf("\t%d", beacons.at(rbssid[0]));				//beacons count
             printf("\t");
+			printf("%d \t", power);
+
             //끝에 \0으로 안끝나다 보니 이상한 문자도 같이 출력 -> 길이 만큼 글자 하나하나 추가
             for(int i = 0; i <= bd->ssid_length-1; i++){
-                printf("%c", ressid[i]);
+                printf("%c", ressid[i]);						//ESSID
             }
             printf("\n");
 
@@ -69,10 +97,7 @@ void analysis_packet(int len, const u_char* packet){
 
 
 int main(int argc, char* argv[]) {
-
-
 	if (!parse(&param, argc, argv)){
-        printf("cand1_Error");
 		return -1;
     }
 	char errbuf[PCAP_ERRBUF_SIZE];  // PCAP_ERRBUF_SIZE = 256
@@ -86,7 +111,7 @@ int main(int argc, char* argv[]) {
 	}
 
     // 실제 데이터의 처리를 해야 하는 부분
-    printf("BSSID\t\t beacons \t\tESSID \n");
+    printf("BSSID\t\t    beacons \tPWR \tESSID \n");
 	while (true) {
 		struct pcap_pkthdr* header;
 		const u_char* packet;

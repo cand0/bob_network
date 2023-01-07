@@ -27,6 +27,10 @@ typedef struct beacon_data {
     uint8_t  ssid_length;
 } BD;
 
+typedef struct flags {
+    uint8_t flag;
+} FLAG;
+
 typedef struct ssid{
     uint8_t   ESSID[32];
 } ESSID;
