@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <map>
+#include <vector>
+
 using namespace std;
 
 #include "pcap-test.h"
@@ -24,7 +26,8 @@ BD *bd;
 ESSID * essid;
 FLAG *flag;
 
-map <char, int> beacons;
+vector<RESULT> result;
+int power;
 
 bool parse(Param* param, int argc, char* argv[]) {
 	if (argc != 2) {
@@ -33,6 +36,22 @@ bool parse(Param* param, int argc, char* argv[]) {
 	}
 	param->dev_ = argv[1];
 	return true;
+}
+
+void print_screen(int ssid_length){
+	printf("\033[H\033[J\n");
+	printf("BSSID\t\t  \t\tbeacons \tPWR \t\tESSID \n");
+	printf("============================================================================================\n");
+
+	for (int i = 0; i < result.size(); i++){
+		printf("%02x:%02x:%02x:%02x:%02x:%02x", result[i].bssid[0], result[i].bssid[1], result[i].bssid[2], result[i].bssid[3], result[i].bssid[4], result[i].bssid[5]);	//BSSID
+		printf("\t\t%d", result[i].beacons);				//beacons count
+		printf("\t");
+		printf("\t%d \t\t", result[i].pwr);
+		printf("%s", result[i].essid);
+		printf("\n");		
+	}
+
 }
 
 int analysis_flags(const u_char* packet){
@@ -59,7 +78,6 @@ int analysis_flags(const u_char* packet){
 }
 
 void analysis_packet(int len, const u_char* packet){
-
     rth = (RTH*)packet;
     dp = (DP*)(packet+rth->it_len);
     bd = (BD*)(packet + rth->it_len + sizeof(ieee80211_header) - 1);
@@ -67,6 +85,7 @@ void analysis_packet(int len, const u_char* packet){
     essid = (ESSID*)(packet + rth->it_len-1 + sizeof(ieee80211_header) - 1 + sizeof(beacon_data) -1);
 	uint8_t rbssid[7];
     char ressid[32];
+	int chk = 1;
 
 	//bssid 변수 저장
 	for (int i = 0; i < sizeof(rbssid); i++){
@@ -75,23 +94,33 @@ void analysis_packet(int len, const u_char* packet){
 
     if (dp->sub_type == 0x80){      // sub_type == 0x80 -> beaconf packet filter
         if(essid->ESSID[0] != 00){  // SSID 중 0x00이 있는 값이 있던 것 삭제
-			beacons[rbssid[0]] += 1;
-
+			memset(ressid, 0x00, sizeof(ressid));				//essid 끝에 값 꺠지는거 제거
             memcpy(ressid, essid->ESSID, bd->ssid_length);		//SSID
-			int power = analysis_flags(packet);					//PWR
+			power = analysis_flags(packet);						//PWR
 
-			printf("%02x:%02x:%02x:%02x:%02x:%02x", rbssid[0], rbssid[1], rbssid[2], rbssid[3], rbssid[4], rbssid[5]);	//BSSID
-			printf("\t%d", beacons.at(rbssid[0]));				//beacons count
-            printf("\t");
-			printf("%d \t", power);
+			struct result tmp;
 
-            //끝에 \0으로 안끝나다 보니 이상한 문자도 같이 출력 -> 길이 만큼 글자 하나하나 추가
-            for(int i = 0; i <= bd->ssid_length-1; i++){
-                printf("%c", ressid[i]);						//ESSID
-            }
-            printf("\n");
+			for(int i = 0; i < sizeof(rbssid); i++){
+				tmp.bssid[i] = rbssid[i];
+			}
+			tmp.pwr = power;
 
-        }
+			for(int i = 0; i< sizeof(ressid); i++){
+				tmp.essid[i] = ressid[i];
+			}
+
+			for (int i = 0; i < (int)result.size(); i++){				
+				if (!memcmp(result[i].bssid, dp->bssid, 6)){
+					result[i].beacons++;
+					chk = 0;
+				}
+			}
+			if (chk){
+				result.push_back(tmp);
+			}
+			
+			print_screen(bd->ssid_length);
+		}
     }
 }
 
@@ -121,7 +150,6 @@ int main(int argc, char* argv[]) {
 			printf("pcap_next_ex return %d(%s)\n", res, pcap_geterr(pcap));
 			break;
 		}
-
         analysis_packet(header->len, packet);
 	}
 
