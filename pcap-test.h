@@ -34,3 +34,10 @@ typedef struct flags {
 typedef struct ssid{
     uint8_t   ESSID[32];
 } ESSID;
+
+typedef struct result{
+    uint8_t bssid[6];
+    int beacons;
+    int pwr;
+    char essid[32];
+} RESULT;
