@@ -26,6 +26,8 @@ BD *bd;
 ESSID * essid;
 FLAG *flag;
 
+int channel = 1;
+
 vector<RESULT> result;
 int power;
 
@@ -40,6 +42,7 @@ bool parse(Param* param, int argc, char* argv[]) {
 
 void print_screen(int ssid_length){
 	printf("\033[H\033[J\n");
+	printf("channel : %d \n\n", channel);
 	printf("BSSID\t\t  \t\tbeacons \tPWR \t\tESSID \n");
 	printf("============================================================================================\n");
 
@@ -142,6 +145,12 @@ int main(int argc, char* argv[]) {
 
     // 실제 데이터의 처리를 해야 하는 부분
 	while (true) {
+		char cmd[100];
+		sprintf(cmd, "iwconfig %s channel %d",argv[1], channel);
+		system("iwconfig mon0 channel 1");
+		channel ++;
+		if (channel == 15)
+			channel = 1;
 		struct pcap_pkthdr* header;
 		const u_char* packet;
 		int res = pcap_next_ex(pcap, &header, &packet);     // res == pcap의 데이터를 잘못 가져올 경우 에러 처리를 위함
