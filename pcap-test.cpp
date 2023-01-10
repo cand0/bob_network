@@ -112,6 +112,7 @@ void analysis_packet(int len, const u_char* packet){
 			for (int i = 0; i < (int)result.size(); i++){				
 				if (!memcmp(result[i].bssid, dp->bssid, 6)){
 					result[i].beacons++;
+					result[i].pwr = tmp.pwr;
 					chk = 0;
 				}
 			}
@@ -140,7 +141,6 @@ int main(int argc, char* argv[]) {
 	}
 
     // 실제 데이터의 처리를 해야 하는 부분
-    printf("BSSID\t\t    beacons \tPWR \tESSID \n");
 	while (true) {
 		struct pcap_pkthdr* header;
 		const u_char* packet;
